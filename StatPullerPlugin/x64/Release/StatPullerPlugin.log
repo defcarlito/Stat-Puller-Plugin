@@ -1,0 +1,13 @@
+﻿  StatPullerPlugin.cpp
+C:\Users\harri\source\repos\StatPullerPlugin\StatPullerPlugin\StatPullerPlugin.cpp(72,61): warning C4244: '=': conversion from 'float' to 'int', possible loss of data
+  (compiling source file '/StatPullerPlugin.cpp')
+  
+C:\Users\harri\source\repos\StatPullerPlugin\StatPullerPlugin\StatPullerPlugin.cpp(115,16): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+  (compiling source file '/StatPullerPlugin.cpp')
+  
+     Creating library C:\Users\harri\source\repos\StatPullerPlugin\x64\Release\StatPullerPlugin.lib and object C:\Users\harri\source\repos\StatPullerPlugin\x64\Release\StatPullerPlugin.exp
+  Generating code
+  Previous IPDB and IOBJ mismatch, fall back to full compilation.
+  All 1559 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  StatPullerPlugin.vcxproj -> C:\Users\harri\source\repos\StatPullerPlugin\x64\Release\StatPullerPlugin.dll
