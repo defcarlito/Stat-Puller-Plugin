@@ -22,7 +22,12 @@ public:
 	void OnMatchEnded(std::string eventName);
 	void OnMatchStarted(std::string eventName);
 
+	void OnPlayerRemoved(ServerWrapper server, void* params, std::string eventName);
+
+	void SaveMatchImmediatelyFromCache();
+
 private:
+
 	void Log(std::string msg);
 	int mmrAfter = -1;
 	int mmrBefore = -1;
@@ -32,9 +37,11 @@ private:
 	long long matchStartUnix = 0;
 	long long matchEndUnix = 0;
 
+
 	// bools used to prevent repeat calls
 	bool isMatchInProgress = false;
 	bool isInReplay = false;
+	bool hasSavedMatchData = false;
 
 	std::unordered_map<std::string, json> cachedPlayerStats;
 
