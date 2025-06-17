@@ -23,7 +23,7 @@ namespace fs = std::filesystem;
 // version:
 // major: changes to exported .json data structure, new data fields
 // minor: patch, bug fixes, small changes
-#define STAT_PULLER_VERSION "1.7"
+#define STAT_PULLER_VERSION "1.8"
 
 #define PLAYLIST_TYPE "1s" // playlist type, currently only supports 1v1 ranked matches
 
@@ -89,11 +89,6 @@ void StatPullerPlugin::OnPlayerRemoved(ServerWrapper server, void* params, std::
 		hasMatchEndedEarly = true;
 		Log("StatPuller: Local player was removed");
 		OnMatchEnded("LocalPlayerLeftEarly"); // trigger match end logic
-	}
-	else if (PLAYLIST_TYPE == "1s") { // temp while it only supports 1v1 ranked matches
-		hasMatchEndedEarly = true;
-		Log("StatPuller: Opponent removed, triggering forced match end");
-		OnMatchEnded("OpponentLeftEarly");
 	}
 }
 
