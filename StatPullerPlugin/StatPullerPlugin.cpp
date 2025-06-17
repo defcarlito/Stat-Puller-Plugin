@@ -23,7 +23,7 @@ namespace fs = std::filesystem;
 // version:
 // major: changes to exported .json data structure, new data fields
 // minor: patch, bug fixes, small changes
-#define STAT_PULLER_VERSION "1.6"
+#define STAT_PULLER_VERSION "1.7"
 
 #define PLAYLIST_TYPE "1s" // playlist type, currently only supports 1v1 ranked matches
 
@@ -40,12 +40,13 @@ void StatPullerPlugin::onUnload() {
 }
 
 void StatPullerPlugin::LoadHooks() {
+	// Function TAGame.PRI_TA.OnScoredGoal - best way to get on goal scored event?
+
 	gameWrapper->HookEventWithCaller<ServerWrapper>(
 		"Function GameEvent_Soccar_TA.ReplayPlayback.BeginState",
 		std::bind(&StatPullerPlugin::OnReplayStart, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)
 	);
 	gameWrapper->HookEvent("Function TAGame.AchievementManager_TA.HandleMatchEnded", std::bind(&StatPullerPlugin::OnMatchEnded, this, std::placeholders::_1));
-	/*gameWrapper->HookEvent("Function TAGame.Ball_TA.Explode", std::bind(&StatPullerPlugin::OnGoalScored, this, std::placeholders::_1));*/
 	gameWrapper->HookEvent("Function TAGame.Team_TA.PostBeginPlay", std::bind(&StatPullerPlugin::OnMatchStarted, this, std::placeholders::_1));
 	gameWrapper->HookEvent("Function GameEvent_Soccar_TA.ReplayPlayback.EndState", std::bind(&StatPullerPlugin::OnReplayEnd, this, std::placeholders::_1));
 	gameWrapper->HookEventWithCaller<ServerWrapper>(
@@ -60,6 +61,10 @@ struct PriRemovedParams {
 
 void StatPullerPlugin::OnPlayerRemoved(ServerWrapper server, void* params, std::string eventName) {
 	auto pri = PriWrapper(static_cast<PriRemovedParams*>(params)->PRI);
+	if (!isMatchInProgress) {
+		Log("Match is over, skipping player removal event.");
+		return;
+	}
 
 	if (pri.IsNull()) {
 		Log("StatPuller: Player removed but PRI is null. Skipping.");
@@ -89,10 +94,8 @@ void StatPullerPlugin::OnPlayerRemoved(ServerWrapper server, void* params, std::
 
 // gets the current date and time when the match starts
 void StatPullerPlugin::OnMatchStarted(std::string eventName) {
-	if (!gameWrapper->IsInOnlineGame()) {
-		Log("StatPuller: Ignored OnMatchStarted outside of online match.");
-		return;
-	}
+	// todo: need to check if this is an online match, otherwise skip
+
 
 	if (isMatchInProgress) return; // prevent multiple calls
 	isMatchInProgress = true; // indicate that a match is in progress
@@ -114,7 +117,7 @@ void StatPullerPlugin::OnMatchStarted(std::string eventName) {
 		UniqueIDWrapper uid = gameWrapper->GetUniqueID();
 		this->mmrBefore = gameWrapper->GetMMRWrapper().GetPlayerMMR(uid, 10);
 		Log("StatPuller: MMR before match: " + std::to_string(this->mmrBefore));
-		}, 1.0f); // 1 second delay
+		}, 1.0f); // 3 second delay
 }
 
 void StatPullerPlugin::OnMatchEnded(std::string name) {
@@ -244,11 +247,6 @@ void StatPullerPlugin::OnReplayStart(ServerWrapper caller, void* params, std::st
 	int team = scorer.GetTeamNum();
 
 	Log("StatPuller: Scored by: " + scorerName + " on team " + std::to_string(team));
-}
-
-void StatPullerPlugin::OnGoalScored(std::string name) {
-	if (isMatchInProgress == false) return; // return if the match has ended
-	if (isInReplay) return; // ignore ball explodes during replays
 }
 
 
