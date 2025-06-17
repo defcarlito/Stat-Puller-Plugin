@@ -86,9 +86,14 @@ void StatPullerPlugin::OnPlayerRemoved(ServerWrapper server, void* params, std::
 
 	cachedPlayerStats[playerName] = playerData;
 	if (pri.IsLocalPlayerPRI()) {
+		hasMatchEndedEarly = true;
 		Log("StatPuller: Local player was removed");
-		hasLocalPlayerLeftEarly = true;
-		OnMatchEnded("ForceEndEarly"); // trigger match end logic
+		OnMatchEnded("LocalPlayerLeftEarly"); // trigger match end logic
+	}
+	else if (PLAYLIST_TYPE == "1s") { // temp while it only supports 1v1 ranked matches
+		hasMatchEndedEarly = true;
+		Log("StatPuller: Opponent removed, triggering forced match end");
+		OnMatchEnded("OpponentLeftEarly");
 	}
 }
 
@@ -101,7 +106,7 @@ void StatPullerPlugin::OnMatchStarted(std::string eventName) {
 	isMatchInProgress = true; // indicate that a match is in progress
 
 	hasSavedMatchData = false; // reset saved match data flag
-	hasLocalPlayerLeftEarly = false; // reset early exit flag
+	hasMatchEndedEarly = false; // reset early exit flag
 
 	Log("StatPuller: Match has started.");
 
@@ -145,8 +150,8 @@ void StatPullerPlugin::OnMatchEnded(std::string name) {
 
 		std::set<std::string> presentPlayers;
 
-		if (hasLocalPlayerLeftEarly) {
-			hasLocalPlayerLeftEarly = false;
+		if (hasMatchEndedEarly) {
+			hasMatchEndedEarly = false;
 
 			for (const auto& [name, data] : cachedPlayerStats) {
 				fullMatchData["players"].push_back(data);

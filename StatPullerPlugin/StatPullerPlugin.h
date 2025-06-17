@@ -39,7 +39,7 @@ private:
 	long long matchStartUnix = 0;
 	long long matchEndUnix = 0;
 
-	bool hasLocalPlayerLeftEarly = false;
+	bool hasMatchEndedEarly = false;
 
 
 	// bools used to prevent repeat calls
