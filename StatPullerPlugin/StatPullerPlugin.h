@@ -14,6 +14,7 @@ public:
 	virtual void onUnload() override;
 
 	void LoadHooks();
+
 	void OnGoalScored(std::string name);
 
 	void OnReplayStart(ServerWrapper caller, void* params, std::string eventName);
@@ -24,7 +25,8 @@ public:
 
 	void OnPlayerRemoved(ServerWrapper server, void* params, std::string eventName);
 
-	void SaveMatchImmediatelyFromCache();
+	void SaveMatchDataToFile(const json& wrapped);
+	void RunFirebaseUploadScript();
 
 private:
 
@@ -36,6 +38,8 @@ private:
 
 	long long matchStartUnix = 0;
 	long long matchEndUnix = 0;
+
+	bool hasLocalPlayerLeftEarly = false;
 
 
 	// bools used to prevent repeat calls
