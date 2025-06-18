@@ -28,6 +28,8 @@ public:
 	void SaveMatchDataToFile(const json& wrapped);
 	void RunFirebaseUploadScript();
 
+	void OnStatUpdated(std::string eventName);
+
 private:
 
 	void Log(std::string msg);
