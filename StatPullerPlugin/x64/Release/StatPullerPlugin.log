@@ -1,14 +1,14 @@
 ﻿  StatPullerPlugin.cpp
-C:\Users\harri\source\repos\StatPullerPlugin\StatPullerPlugin\StatPullerPlugin.cpp(149,63): warning C4244: '=': conversion from 'float' to 'int', possible loss of data
+C:\Users\harri\source\repos\StatPullerPlugin\StatPullerPlugin\StatPullerPlugin.cpp(81,63): warning C4244: '=': conversion from 'float' to 'int', possible loss of data
   (compiling source file '/StatPullerPlugin.cpp')
   
-C:\Users\harri\source\repos\StatPullerPlugin\StatPullerPlugin\StatPullerPlugin.cpp(215,19): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+C:\Users\harri\source\repos\StatPullerPlugin\StatPullerPlugin\StatPullerPlugin.cpp(101,16): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
   (compiling source file '/StatPullerPlugin.cpp')
   
      Creating library C:\Users\harri\source\repos\StatPullerPlugin\x64\Release\StatPullerPlugin.lib and object C:\Users\harri\source\repos\StatPullerPlugin\x64\Release\StatPullerPlugin.exp
   Generating code
-  8 of 1655 functions ( 0.5%) were compiled, the rest were copied from previous compilation.
+  20 of 1063 functions ( 1.9%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    3 functions had inline decision re-evaluated but remain unchanged
+    28 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
   StatPullerPlugin.vcxproj -> C:\Users\harri\source\repos\StatPullerPlugin\x64\Release\StatPullerPlugin.dll

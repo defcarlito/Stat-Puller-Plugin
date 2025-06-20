@@ -15,11 +15,6 @@ public:
 
 	void LoadHooks();
 
-	void OnGoalScored(std::string name);
-
-	void OnReplayStart(ServerWrapper caller, void* params, std::string eventName);
-	void OnReplayEnd(std::string eventName);
-
 	void OnMatchEnded(std::string eventName);
 	void OnMatchStarted(std::string eventName);
 
@@ -28,29 +23,13 @@ public:
 	void SaveMatchDataToFile(const json& wrapped);
 	void RunFirebaseUploadScript();
 
-	void OnStatUpdated(std::string eventName);
-
 private:
 
 	void Log(std::string msg);
 	int mmrAfter = -1;
 	int mmrBefore = -1;
-
-	std::string playlistType;
-
-	long long matchStartUnix = 0;
-	long long matchEndUnix = 0;
-
-	bool hasMatchEndedEarly = false;
-
-
-	// bools used to prevent repeat calls
-	bool isMatchInProgress = false;
-	bool isInReplay = false;
-	bool hasSavedMatchData = false;
-
-	std::unordered_map<std::string, json> cachedPlayerStats;
-
 	
+	bool isMatchInProgress = false;
+	bool hasSavedMatchData = false;
 };
 
