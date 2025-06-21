@@ -23,7 +23,10 @@ namespace fs = std::filesystem;
 // version:
 // major: changes to exported .json data structure, new data fields
 // minor: patch, bug fixes, small changes
-#define STAT_PULLER_VERSION "2.0"
+#define STAT_PULLER_VERSION "4.0"
+
+// file path to python script: 
+#define PYTHON_SCRIPT_PATH "C:\\Users\\harri\\Desktop\\StatPuller-write-to-firebase\\"
 
 BAKKESMOD_PLUGIN(StatPullerPlugin, "Stat Puller Plugin", STAT_PULLER_VERSION, PERMISSION_ALL)
 
@@ -33,101 +36,152 @@ void StatPullerPlugin::onLoad() {
 	this->LoadHooks();
 }
 
-void StatPullerPlugin::onUnload() {
+void StatPullerPlugin::onUnload() 
+{
 
 }
 
-void StatPullerPlugin::LoadHooks() {
+void StatPullerPlugin::LoadHooks() 
+{
 	// Function TAGame.PRI_TA.OnScoredGoal - best way to get on goal scored event?
 
-	gameWrapper->HookEvent("Function TAGame.AchievementManager_TA.HandleMatchEnded", std::bind(&StatPullerPlugin::OnMatchEnded, this, std::placeholders::_1));
-	gameWrapper->HookEvent("Function TAGame.Team_TA.PostBeginPlay", std::bind(&StatPullerPlugin::OnMatchStarted, this, std::placeholders::_1));
+	gameWrapper->HookEvent("Function TAGame.GameEvent_Soccar_TA.OnAllTeamsCreated", std::bind(&StatPullerPlugin::OnMatchStarted, this, std::placeholders::_1));
 	gameWrapper->HookEventWithCaller<ServerWrapper>(
-		"Function TAGame.GameEvent_TA.EventPlayerRemoved",
-		std::bind(&StatPullerPlugin::OnPlayerRemoved, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)
+		"Function TAGame.GameEvent_Soccar_TA.EventMatchEnded",
+		std::bind(&StatPullerPlugin::OnGameComplete,
+			this,
+			std::placeholders::_1,
+			std::placeholders::_2,
+			std::placeholders::_3)
+	);
+
+	gameWrapper->HookEventWithCaller<ServerWrapper>(
+		"Function TAGame.GameEvent_Soccar_TA.Destroyed",
+		std::bind(&StatPullerPlugin::OnGameComplete,
+			this,
+			std::placeholders::_1,
+			std::placeholders::_2,
+			std::placeholders::_3)
 	);
 }
 
-struct PriRemovedParams {
-	uintptr_t PRI;
-};
-
-void StatPullerPlugin::OnPlayerRemoved(ServerWrapper server, void* params, std::string eventName) {
-	auto pri = PriWrapper(static_cast<PriRemovedParams*>(params)->PRI);
-	if (!isMatchInProgress || pri.IsNull()) return;
-
-	if (pri.IsLocalPlayerPRI()) {
-		Log("StatPuller: Local player was removed early, running OnMatchEnd now.");
-		OnMatchEnded("LocalPlayerLeftEarly");
-	}
-}
-
-void StatPullerPlugin::OnMatchStarted(std::string eventName) {
-	if (isMatchInProgress) return;
-	isMatchInProgress = true;
-
-	gameWrapper->SetTimeout([this](GameWrapper*) {
-		if (!gameWrapper->IsInOnlineGame()) {
+void StatPullerPlugin::OnMatchStarted(std::string eventName)
+{
+	gameWrapper->SetTimeout([this](GameWrapper*) 
+	{
+		if (!gameWrapper->IsInOnlineGame() || gameWrapper->IsInReplay())
+		{
 			Log("StatPuller: Ignored OnMatchStarted because it's not an online match.");
-			isMatchInProgress = false;
 			return;
 		}
 
-		hasSavedMatchData = false;
+		isReplaySaved = false;
+		isMatchInProgress = true;
+		wasEarlyExit = false;
+		mmrBefore = -1;
+		mmrAfter = -1;
 
-		// wait briefly before pulling MMR to ensure it's accurate
-		gameWrapper->SetTimeout([this](GameWrapper*) {
-			UniqueIDWrapper uid = gameWrapper->GetUniqueID();
-			this->mmrBefore = gameWrapper->GetMMRWrapper().GetPlayerMMR(uid, 10);
-		}, 1.0f); // inner 1s delay for MMR
+		gameWrapper->SetTimeout([this](GameWrapper*) 
+		{
+			const int playlist = gameWrapper->GetMMRWrapper().GetCurrentPlaylist();
+			const UniqueIDWrapper uid = gameWrapper->GetUniqueID();
+			mmrBefore = gameWrapper->GetMMRWrapper().GetPlayerMMR(uid, playlist);
+		}, 1.0f);
 
 		Log("StatPuller: Match has started.");
 	}, 3.0f);
 }
 
-void StatPullerPlugin::OnMatchEnded(std::string name) {
-	if (hasSavedMatchData) {
-		Log("StatPuller: Match data already saved. Skipping duplicate OnMatchEnded call.");
-		return;
-	}
-	Log("StatPuller: OnMatchEnded triggered.");
-	hasSavedMatchData = true;
+void StatPullerPlugin::OnGameComplete(ServerWrapper server,
+	void*,
+	std::string eventName)
+{
+	if (!isMatchInProgress || isReplaySaved || (gameWrapper->IsInReplay())) return;
+	isReplaySaved = true;
 	isMatchInProgress = false;
 
-	gameWrapper->SetTimeout([this](GameWrapper*) {
+	// export the replay while 'server' is still alive
+	TrySaveReplay(server, wasEarlyExit ? "early-exit" : "match-end");
 
-		ServerWrapper game = gameWrapper->GetOnlineGame();
-		if (game.IsNull() || game.GetPlaylist().GetPlaylistId() != 10) return;
-		int mmrAfter = gameWrapper->GetMMRWrapper().GetPlayerMMR(gameWrapper->GetUniqueID(), 10);
-
+	gameWrapper->SetTimeout([this](GameWrapper*) 
+	{
+		const int playlist = gameWrapper->GetMMRWrapper().GetCurrentPlaylist();
+		mmrAfter = gameWrapper->GetMMRWrapper().GetPlayerMMR(gameWrapper->GetUniqueID(), playlist);
 		json localMatchStats;
 		localMatchStats["version"] = STAT_PULLER_VERSION;
 		localMatchStats["mmr_before"] = mmrBefore;
 		localMatchStats["mmr_after"] = mmrAfter;
+
+		Log("MMR Before Match: " + std::to_string(mmrBefore));
+		Log("MMR After Match: " + std::to_string(mmrAfter));
 
 		SaveMatchDataToFile(localMatchStats);
 		RunFirebaseUploadScript();
 
 		Log("StatPuller: Match data saved and uploaded.");
 	}, 0.2f);
+
+
 }
 
+struct PriRemovedParams {
+	uintptr_t PRI;
+};
 
 void StatPullerPlugin::SaveMatchDataToFile(const json& wrapped) {
-	std::string folder = "C:\\Users\\harri\\Desktop\\StatPuller-write-to-firebase";
-	std::string path = folder + "\\last-match-stats.json";
+	std::string folder = PYTHON_SCRIPT_PATH;
+	std::string path = folder + "last-match-stats.json";
 	std::ofstream file(path, std::ofstream::trunc);
 	file << wrapped.dump(4);
 	file.close();
 }
 
+void StatPullerPlugin::TrySaveReplay(ServerWrapper server, const std::string& label)
+{
+	if (server.IsNull()) {
+		Log("TrySaveReplay: Server is null, skipping replay save.");
+		return;
+	}
+
+	ReplayDirectorWrapper replayDirector = server.GetReplayDirector();
+	if (replayDirector.IsNull()) {
+		Log("TrySaveReplay: ReplayDirector is null.");
+		return;
+	}
+
+	ReplaySoccarWrapper soccarReplay = replayDirector.GetReplay();
+	if (soccarReplay.memory_address == NULL) {
+		Log("TrySaveReplay: Replay object is null.");
+		return;
+	}
+
+	soccarReplay.StopRecord();
+
+	std::string replayName = "last-match-replay";
+	std::string replayPath = fs::path(PYTHON_SCRIPT_PATH + replayName + ".replay").string();
+
+	soccarReplay.ExportReplay(replayPath);
+
+	// Optional: confirm file creation
+	if (fs::exists(replayPath)) {
+		Log("Replay saved successfully: " + replayPath);
+	}
+	else {
+		Log("Replay export failed or was not saved to expected path.");
+	}
+}
+
 void StatPullerPlugin::RunFirebaseUploadScript() {
-	std::thread([] {
+    std::string scriptPath = std::string(PYTHON_SCRIPT_PATH) + "main.py";
+	std::wstring wScriptPath(scriptPath.begin(), scriptPath.end());
+
+	std::thread([wScriptPath] {
+
 		ShellExecute(
 			nullptr,
 			L"open",
 			L"pythonw.exe",
-			L"\"C:\\Users\\harri\\Desktop\\StatPuller-write-to-firebase\\main.py\"",
+			wScriptPath.c_str(),
 			nullptr,
 			SW_HIDE
 		);
