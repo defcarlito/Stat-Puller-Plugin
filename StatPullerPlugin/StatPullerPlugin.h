@@ -36,16 +36,19 @@ public:
     void UpdateClock();
 
     void SaveMatchDataToFile(const json& wrapped);  
-    void RunFirebaseUploadScript();  
+    void RunFirebaseUploadScript();
     void TrySaveReplay(ServerWrapper server, const std::string& label);
 
 private:  
-
     void Log(std::string msg);  
+
+    std::vector<json> goalEvents;
+
     int mmrAfter = -1;  
     int mmrBefore = -1;  
 
-    float simulatedClock = 300.0f;
+    int simulatedClock = 300;
+    int playlist = -1;
 
     bool isReplaySaved = false;  
     bool wasEarlyExit = false;  

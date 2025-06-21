@@ -79,7 +79,8 @@ void StatPullerPlugin::LoadHooks()
 
 void StatPullerPlugin::OnMatchStarted(std::string eventName)
 {
-	simulatedClock = 300.0f;
+	simulatedClock = 300;
+	goalEvents.clear();
 
 	gameWrapper->SetTimeout([this](GameWrapper*) 
 	{
@@ -90,7 +91,8 @@ void StatPullerPlugin::OnMatchStarted(std::string eventName)
 		}
 
 		ServerWrapper game = gameWrapper->GetOnlineGame();
-		int playlist = (game.GetPlaylist().GetPlaylistId());
+		playlist = game.GetPlaylist().GetPlaylistId();
+
 		if (playlist != 10 && playlist != 11 ) {
 			Log("StatPuller: Not ranked 1v1 nor 2v2. Skipping.");
 			return;
@@ -104,7 +106,6 @@ void StatPullerPlugin::OnMatchStarted(std::string eventName)
 
 		gameWrapper->SetTimeout([this](GameWrapper*) 
 		{
-			const int playlist = gameWrapper->GetMMRWrapper().GetCurrentPlaylist();
 			const UniqueIDWrapper uid = gameWrapper->GetUniqueID();
 			mmrBefore = gameWrapper->GetMMRWrapper().GetPlayerMMR(uid, playlist);
 		}, 1.0f);
@@ -119,8 +120,6 @@ void StatPullerPlugin::OnGameComplete(ServerWrapper server,
 {
 	if (!isMatchInProgress || isReplaySaved || (gameWrapper->IsInReplay())) return;
 
-	ServerWrapper game = gameWrapper->GetOnlineGame();
-	int playlist = (game.GetPlaylist().GetPlaylistId());
 	if (playlist != 10 && playlist != 11) return;
 
 	isReplaySaved = true;
@@ -130,12 +129,13 @@ void StatPullerPlugin::OnGameComplete(ServerWrapper server,
 
 	gameWrapper->SetTimeout([this](GameWrapper*) 
 	{
-		const int playlist = gameWrapper->GetMMRWrapper().GetCurrentPlaylist();
 		mmrAfter = gameWrapper->GetMMRWrapper().GetPlayerMMR(gameWrapper->GetUniqueID(), playlist);
 		json localMatchStats;
-		localMatchStats["version"] = STAT_PULLER_VERSION;
-		localMatchStats["mmr_before"] = mmrBefore;
-		localMatchStats["mmr_after"] = mmrAfter;
+		localMatchStats["Version"] = STAT_PULLER_VERSION;
+		localMatchStats["MMR_Before"] = mmrBefore;
+		localMatchStats["MMR_After"] = mmrAfter;
+		localMatchStats["Goals"] = goalEvents;
+		localMatchStats["Playlist"] = playlist;
 
 		SaveMatchDataToFile(localMatchStats);
 		RunFirebaseUploadScript();
@@ -156,18 +156,26 @@ void StatPullerPlugin::onStatTickerMessage(void* params)
 	{
 		if (!receiver || receiver.IsNull()) 
 		{
-			Log("Receiver PRI is null.");
+			Log("StatPuller: Receiver PRI is null.");
 			return;
 		}
 
+
 		std::string scorerName = receiver.GetPlayerName().ToString();
-		int teamNum = receiver.GetTeamNum(); // 0 = blue 1 = orange
+		int teamNum = receiver.GetTeamNum(); // 0 = blue, 1 = orange
 		Log("Goal scored by: " + scorerName + " on team " + std::to_string(teamNum) + " at " + std::to_string(simulatedClock));
+
+		json goal;
+		goal["ScorerName"] = scorerName;
+		goal["ScorerTeam"] = teamNum;
+		goal["GoalTimeSeconds"] = simulatedClock;
+
+		goalEvents.push_back(goal);
 	}
 }
 
 void StatPullerPlugin::UpdateClock() {  
-	simulatedClock -= 1.0f;
+	simulatedClock -= 1;
 }
 
 void StatPullerPlugin::SaveMatchDataToFile(const json& wrapped) {
