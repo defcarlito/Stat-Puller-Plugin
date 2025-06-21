@@ -1,42 +1,53 @@
-#pragma once
+#pragma once  
 
-#include "bakkesmod/plugin/bakkesmodplugin.h"
+#include "bakkesmod/plugin/bakkesmodplugin.h"  
+#include "bakkesmod/wrappers/GameObject/Stats/StatEventWrapper.h"   
 
-#include "json.hpp"
-using json = nlohmann::json;
+#include "json.hpp"  
+using json = nlohmann::json;  
 
-#pragma comment ( lib, "pluginsdk.lib" )
+#pragma comment ( lib, "pluginsdk.lib" )  
 
-class StatPullerPlugin : public BakkesMod::Plugin::BakkesModPlugin
-{
-public:
-	virtual void onLoad() override;
-	virtual void onUnload() override;
+struct StatTickerParams {  
+    uintptr_t Receiver;  
+    uintptr_t Victim;  
+    uintptr_t StatEvent;  
+};  
 
-	void LoadHooks();
+struct StatEventParams {  
+    uintptr_t PRI;  
+    uintptr_t StatEvent;  
+};  
 
-	void OnMatchStarted(std::string eventName);
-	void OnGameComplete(ServerWrapper server,
-		void* params,
-		std::string   eventName);
-	void OnPlayerRemoved(ServerWrapper server, void* params, std::string eventName);
+class StatPullerPlugin : public BakkesMod::Plugin::BakkesModPlugin  
+{  
+public:  
+    virtual void onLoad() override;  
+    virtual void onUnload() override;  
 
-	void SaveMatchDataToFile(const json& wrapped);
-	void RunFirebaseUploadScript();
-	void TrySaveReplay(ServerWrapper server, const std::string& label);
+    void LoadHooks();  
 
-private:
+    void OnMatchStarted(std::string eventName);  
+    void OnGameComplete(ServerWrapper server,  
+        void* params,  
+        std::string   eventName);  
 
-	void Log(std::string msg);
-	int mmrAfter = -1;
-	int mmrBefore = -1;
+    void onStatTickerMessage(void* params);  
+    void UpdateClock();
 
-	bool isReplaySaved = false;
-	bool wasEarlyExit = false;
-	bool isMatchInProgress = false;
+    void SaveMatchDataToFile(const json& wrapped);  
+    void RunFirebaseUploadScript();  
+    void TrySaveReplay(ServerWrapper server, const std::string& label);
 
-	
+private:  
+
+    void Log(std::string msg);  
+    int mmrAfter = -1;  
+    int mmrBefore = -1;  
+
+    float simulatedClock = 300.0f;
+
+    bool isReplaySaved = false;  
+    bool wasEarlyExit = false;  
+    bool isMatchInProgress = false;  
 };
-
-
-

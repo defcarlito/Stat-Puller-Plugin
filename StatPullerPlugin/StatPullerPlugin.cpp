@@ -43,9 +43,8 @@ void StatPullerPlugin::onUnload()
 
 void StatPullerPlugin::LoadHooks() 
 {
-	// Function TAGame.PRI_TA.OnScoredGoal - best way to get on goal scored event?
-
 	gameWrapper->HookEvent("Function TAGame.GameEvent_Soccar_TA.OnAllTeamsCreated", std::bind(&StatPullerPlugin::OnMatchStarted, this, std::placeholders::_1));
+
 	gameWrapper->HookEventWithCaller<ServerWrapper>(
 		"Function TAGame.GameEvent_Soccar_TA.EventMatchEnded",
 		std::bind(&StatPullerPlugin::OnGameComplete,
@@ -63,15 +62,37 @@ void StatPullerPlugin::LoadHooks()
 			std::placeholders::_2,
 			std::placeholders::_3)
 	);
+
+	gameWrapper->HookEventWithCallerPost<ServerWrapper>(
+		"Function TAGame.GFxHUD_TA.HandleStatTickerMessage",
+		[this](ServerWrapper caller, void* params, std::string eventname) {
+			onStatTickerMessage(params);
+		});
+
+	gameWrapper->HookEvent(
+		"Function TAGame.GameEvent_Soccar_TA.OnGameTimeUpdated",
+		[this](std::string eventName) {
+			UpdateClock();
+		}
+	);
 }
 
 void StatPullerPlugin::OnMatchStarted(std::string eventName)
 {
+	simulatedClock = 300.0f;
+
 	gameWrapper->SetTimeout([this](GameWrapper*) 
 	{
 		if (!gameWrapper->IsInOnlineGame() || gameWrapper->IsInReplay())
 		{
 			Log("StatPuller: Ignored OnMatchStarted because it's not an online match.");
+			return;
+		}
+
+		ServerWrapper game = gameWrapper->GetOnlineGame();
+		int playlist = (game.GetPlaylist().GetPlaylistId());
+		if (playlist != 10 && playlist != 11 ) {
+			Log("StatPuller: Not ranked 1v1 nor 2v2. Skipping.");
 			return;
 		}
 
@@ -97,10 +118,14 @@ void StatPullerPlugin::OnGameComplete(ServerWrapper server,
 	std::string eventName)
 {
 	if (!isMatchInProgress || isReplaySaved || (gameWrapper->IsInReplay())) return;
+
+	ServerWrapper game = gameWrapper->GetOnlineGame();
+	int playlist = (game.GetPlaylist().GetPlaylistId());
+	if (playlist != 10 && playlist != 11) return;
+
 	isReplaySaved = true;
 	isMatchInProgress = false;
 
-	// export the replay while 'server' is still alive
 	TrySaveReplay(server, wasEarlyExit ? "early-exit" : "match-end");
 
 	gameWrapper->SetTimeout([this](GameWrapper*) 
@@ -112,9 +137,6 @@ void StatPullerPlugin::OnGameComplete(ServerWrapper server,
 		localMatchStats["mmr_before"] = mmrBefore;
 		localMatchStats["mmr_after"] = mmrAfter;
 
-		Log("MMR Before Match: " + std::to_string(mmrBefore));
-		Log("MMR After Match: " + std::to_string(mmrAfter));
-
 		SaveMatchDataToFile(localMatchStats);
 		RunFirebaseUploadScript();
 
@@ -124,9 +146,29 @@ void StatPullerPlugin::OnGameComplete(ServerWrapper server,
 
 }
 
-struct PriRemovedParams {
-	uintptr_t PRI;
-};
+void StatPullerPlugin::onStatTickerMessage(void* params)
+{
+	StatTickerParams* pStruct = (StatTickerParams*)params;
+	StatEventWrapper statEvent = StatEventWrapper(pStruct->StatEvent);
+	PriWrapper receiver = PriWrapper(pStruct->Receiver);
+
+	if (statEvent.GetEventName() == "Goal") 
+	{
+		if (!receiver || receiver.IsNull()) 
+		{
+			Log("Receiver PRI is null.");
+			return;
+		}
+
+		std::string scorerName = receiver.GetPlayerName().ToString();
+		int teamNum = receiver.GetTeamNum(); // 0 = blue 1 = orange
+		Log("Goal scored by: " + scorerName + " on team " + std::to_string(teamNum) + " at " + std::to_string(simulatedClock));
+	}
+}
+
+void StatPullerPlugin::UpdateClock() {  
+	simulatedClock -= 1.0f;
+}
 
 void StatPullerPlugin::SaveMatchDataToFile(const json& wrapped) {
 	std::string folder = PYTHON_SCRIPT_PATH;
@@ -162,17 +204,11 @@ void StatPullerPlugin::TrySaveReplay(ServerWrapper server, const std::string& la
 
 	soccarReplay.ExportReplay(replayPath);
 
-	// Optional: confirm file creation
-	if (fs::exists(replayPath)) {
-		Log("Replay saved successfully: " + replayPath);
-	}
-	else {
-		Log("Replay export failed or was not saved to expected path.");
-	}
+	Log("StatPuller: Replay saved successfully: " + replayPath);
 }
 
 void StatPullerPlugin::RunFirebaseUploadScript() {
-    std::string scriptPath = std::string(PYTHON_SCRIPT_PATH) + "main.py";
+	std::string scriptPath = "\"" + std::string(PYTHON_SCRIPT_PATH) + "main.py\"";
 	std::wstring wScriptPath(scriptPath.begin(), scriptPath.end());
 
 	std::thread([wScriptPath] {
