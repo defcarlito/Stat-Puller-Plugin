@@ -23,10 +23,10 @@ namespace fs = std::filesystem;
 // version:
 // major: changes to exported .json data structure, new data fields
 // minor: patch, bug fixes, small changes
-#define STAT_PULLER_VERSION "4.0"
+#define STAT_PULLER_VERSION "5.0"
 
-// file path to python script: 
-#define PYTHON_SCRIPT_PATH "C:\\Users\\harri\\Desktop\\StatPuller-write-to-firebase\\"
+// full file path to python script ex: "C:\\Users\\(user)\\Desktop\\StatPuller-Build-Match-Summary\\"
+#define PYTHON_SCRIPT_PATH "C:\\Users\\harri\\Desktop\\StatPuller-Build-Match-Summary\\"
 
 BAKKESMOD_PLUGIN(StatPullerPlugin, "Stat Puller Plugin", STAT_PULLER_VERSION, PERMISSION_ALL)
 
@@ -138,7 +138,7 @@ void StatPullerPlugin::OnGameComplete(ServerWrapper server,
 		localMatchStats["Playlist"] = playlist;
 
 		SaveMatchDataToFile(localMatchStats);
-		RunFirebaseUploadScript();
+		RunPythonScript("build_summary.py");
 
 		Log("StatPuller: Match data saved and uploaded.");
 	}, 0.2f);
@@ -152,14 +152,19 @@ void StatPullerPlugin::onStatTickerMessage(void* params)
 	StatEventWrapper statEvent = StatEventWrapper(pStruct->StatEvent);
 	PriWrapper receiver = PriWrapper(pStruct->Receiver);
 
+
 	if (statEvent.GetEventName() == "Goal") 
 	{
+		if (!isMatchInProgress) {
+			Log("StatPuller: Not an online game.");
+			return;
+		}
+
 		if (!receiver || receiver.IsNull()) 
 		{
 			Log("StatPuller: Receiver PRI is null.");
 			return;
 		}
-
 
 		std::string scorerName = receiver.GetPlayerName().ToString();
 		int teamNum = receiver.GetTeamNum(); // 0 = blue, 1 = orange
@@ -171,6 +176,15 @@ void StatPullerPlugin::onStatTickerMessage(void* params)
 		goal["GoalTimeSeconds"] = simulatedClock;
 
 		goalEvents.push_back(goal);
+
+		if (receiver.IsLocalPlayerPRI())
+		{
+			gameWrapper->SetTimeout([this](GameWrapper*)
+				{
+					RunPythonScript("clip.py");
+					Log("StatPuller: Local player scored. Clipping.");
+				}, 2.0f);
+		}
 	}
 }
 
@@ -215,9 +229,10 @@ void StatPullerPlugin::TrySaveReplay(ServerWrapper server, const std::string& la
 	Log("StatPuller: Replay saved successfully: " + replayPath);
 }
 
-void StatPullerPlugin::RunFirebaseUploadScript() {
-	std::string scriptPath = "\"" + std::string(PYTHON_SCRIPT_PATH) + "main.py\"";
+void StatPullerPlugin::RunPythonScript(const std::string& scriptFileName) {
+	std::string scriptPath = "\"" + std::string(PYTHON_SCRIPT_PATH) + scriptFileName + "\"";
 	std::wstring wScriptPath(scriptPath.begin(), scriptPath.end());
+	Log("Calling Python script: " + scriptPath);
 
 	std::thread([wScriptPath] {
 

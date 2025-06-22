@@ -36,7 +36,8 @@ public:
     void UpdateClock();
 
     void SaveMatchDataToFile(const json& wrapped);  
-    void RunFirebaseUploadScript();
+    void RunPythonScript(const std::string& scriptFileName);
+
     void TrySaveReplay(ServerWrapper server, const std::string& label);
 
 private:  
